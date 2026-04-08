@@ -1,9 +1,0 @@
-vlans:
-  - id: 1
-    name: default
-  - id: 10
-    name: users
-  - id: 20
-    name: servers
-  - id: 99
-    name: management

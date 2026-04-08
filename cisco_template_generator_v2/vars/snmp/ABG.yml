@@ -1,6 +1,0 @@
-community: ABG_read_only
-location: "ABG HQ"
-contact: "netops@abg.example.com"
-acl: "20"
-traps: "bgp ospf"
-loopback_ip: "10.20.20.1"

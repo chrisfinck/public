@@ -1,5 +1,0 @@
-vlans:
-  - id: 30
-    name: abg-dev
-  - id: 40
-    name: abg-iot
