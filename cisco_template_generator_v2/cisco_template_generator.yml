@@ -1,0 +1,50 @@
+- hosts: all
+  gather_facts: false
+
+  tasks:
+    - name: Resolve business name (fallback to group or default)
+      set_fact:
+        business: "{{ business | default((group_names | default([])) | first | default('default')) }}"
+
+    - name: Ensure output folder exists
+      file:
+        path: generated_configs
+        state: directory
+
+    - name: Load business-specific or default SNMP vars
+      include_vars:
+        file: "{{ item }}"
+        name: snmp
+      with_first_found:
+        - "vars/snmp/{{ business }}.yml"
+        - "vars/snmp/default.yml"
+
+    - name: Load default VLAN vars
+      include_vars:
+        file: "vars/vlans/default.yml"
+        name: vlan_defaults
+
+    - name: Load business VLAN vars (optional)
+      include_vars:
+        file: "vars/vlans/{{ business }}.yml"
+        name: vlan_custom
+      ignore_errors: yes
+
+    - name: Combine VLANs (default + custom)
+      set_fact:
+        vlans: "{{ (vlan_defaults.vlans | default([])) + (vlan_custom.vlans | default([])) }}"
+
+    - name: Debug SNMP and VLAN vars loaded for business
+      debug:
+        msg: "business={{ business }}, snmp={{ snmp }}, vlans={{ vlans }}"
+      debug:
+        msg: "business={{ business }}, snmp={{ snmp }}"
+
+    - name: Render Cisco IOS config from Jinja template
+      template:
+        src: templates/cisco_ios.j2
+        dest: "generated_configs/{{ inventory_hostname }}.cfg"
+
+    - name: Print output path
+      debug:
+        msg: "Rendered {{ inventory_hostname }} config to generated_configs/{{ inventory_hostname }}.cfg"

@@ -1,0 +1,6 @@
+community: public
+location: "Datacenter"
+contact: "netops@example.com"
+acl: "10"
+traps: "bgp"
+loopback_ip: "10.10.10.1"

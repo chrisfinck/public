@@ -1,0 +1,22 @@
+! --- Cisco IOS generated config
+hostname {{ inventory_hostname }}
+!
+no ip domain-lookup
+!
+snmp-server community {{ snmp.community }} RO {{ snmp.acl }}
+snmp-server location {{ snmp.location }}
+snmp-server contact {{ snmp.contact }}
+{% if snmp.traps is defined %}
+snmp-server enable traps {{ snmp.traps }}
+{% endif %}
+!
+! VLAN definitions
+{% for vlan in vlans %}
+vlan {{ vlan.id }}
+ name {{ vlan.name }}
+{% endfor %}
+!
+interface Loopback0
+ ip address {{ snmp.loopback_ip | default('10.0.0.1') }} 255.255.255.255
+!
+end
