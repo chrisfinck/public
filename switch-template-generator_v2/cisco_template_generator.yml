@@ -37,8 +37,6 @@
     - name: Debug SNMP and VLAN vars loaded for business
       debug:
         msg: "business={{ business }}, snmp={{ snmp }}, vlans={{ vlans }}"
-      debug:
-        msg: "business={{ business }}, snmp={{ snmp }}"
 
     - name: Render Cisco IOS config from Jinja template
       template:
