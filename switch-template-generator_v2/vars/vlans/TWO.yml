@@ -1,0 +1,5 @@
+vlans:
+  - id: 50
+    name: two-guest
+  - id: 60
+    name: two-manufacturing
