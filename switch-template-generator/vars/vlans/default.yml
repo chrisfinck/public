@@ -1,0 +1,15 @@
+vlans:
+  - id: 10
+    name: USER
+  - id: 75
+    name: SERVER
+  - id: 200
+    name: WIRELESS_MGT
+  - id: 201
+    name: WIRELESS_CORPORATE
+  - id: 204
+    name: WIRELESS_GUEST
+  - id: 208
+    name: WIRELESS_CORP_SMARTDEVICE
+  - id: 210
+    name: WIRELESS_PERSONAL_DEVICE

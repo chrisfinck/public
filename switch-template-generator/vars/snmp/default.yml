@@ -1,0 +1,6 @@
+community: public
+location: "Datacenter"
+contact: "NetworkTeam@abc.com"
+acl: "10"
+traps: "snmp authentication linkdown linkup coldstart errdisable"
+loopback_ip: "10.10.10.1"

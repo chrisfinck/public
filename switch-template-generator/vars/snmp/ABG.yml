@@ -1,0 +1,6 @@
+community: ABG_read_only
+location: "ABG HQ"
+contact: "NetworkTeam@abc.com"
+acl: "20"
+traps: ""
+loopback_ip: "10.20.20.1"

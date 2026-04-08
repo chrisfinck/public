@@ -1,0 +1,8 @@
+# SNMP custom configuration - [Requestor:ASMith, Approver: JSmith, Date:01/01/2026, Ticket: INC01234567, Reason: TWO require custom SNMP RO String]
+community: TWO_read_only
+location: "TWO Campus"
+contact: "NetworkTeam@abc.com"
+# ACL custom configuration - [Requestor:ASMith, Approver: JSmith, Date:01/01/2026, Ticket: INC01234578, Reason: TWO require custom ACL for securing monitoring server access]
+acl: "30"
+traps: "bgp ospf eigrp"
+loopback_ip: "10.30.30.1"

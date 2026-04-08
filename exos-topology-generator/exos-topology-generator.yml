@@ -1,0 +1,50 @@
+---
+- name: Configure EXOS port descriptions based on LLDP Neighbours
+  hosts: exos
+  gather_facts: no
+  collections:
+    - community.network
+
+  vars:
+    system_prefix: "CORE"
+
+  tasks:
+    - name: Gather LLDP neighbour info
+      exos_command:
+        commands:
+          - show lldp neighbors
+      register: lldp_output
+
+    - name: Clean LLDP output (remove ANSI/control chars)
+      set_fact:
+        lldp_clean: "{{ lldp_output.stdout[0] | regex_replace('\\x1b\\[[0-9;]*m', '') | regex_replace('[\\r\\t]', '') }}"
+
+    - name: Parse LLDP info for useful rows
+      set_fact:
+        lldp_neighbors: >-
+          {{
+            lldp_clean
+              | regex_findall(
+                  '(?m)^\s*(\d+)\s+([0-9A-F:]{17})\s+(\S+)\s+(\d+)\s+(\d+)\s+([A-Za-z0-9\-_]+)\s*$'
+                )
+          }}
+
+    - name: Filter LLDP entries by system name prefix
+      set_fact:
+        lldp_filtered: >-
+          {{
+            lldp_neighbors
+            | selectattr('5', 'match', '^' ~ system_prefix)
+            | list
+          }}
+
+    - name: Compile list of port desc commands
+      set_fact:
+        port_desc_cmds: "{{ port_desc_cmds | default([]) + ['configure ports %s display-string %s_%s' | format(item[0], item[5], item[2])] }}"
+      loop: "{{ lldp_filtered }}"
+      loop_control:
+        loop_var: item
+
+    - name: Display output
+      debug:
+        msg: "{{ port_desc_cmds }}"
