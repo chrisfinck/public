@@ -1,0 +1,134 @@
+---
+# EXOS Template for Switchport Configuration Deployment Automation
+- name: Check if Vlan exists in vlan database
+  exos_command:
+    commands:
+      - show vlan {{ vlan_id }}
+  register: vlan_check
+
+- name: Fail if target Vlan does not exist
+  ansible.builtin.assert:
+    that:
+      - "'Error: No <vlan_list> found with ID {{ vlan_id }}' not in vlan_check.stdout"
+    fail_msg: "{{ vlan_id }} does not exist on {{ inventory_hostname }}. Aborting."
+
+- name: Get pre-configuration
+  exos_command:
+    commands:
+      - show port {{ int_id }} description
+      - show ports {{ int_id }} vlan
+  changed_when: false
+  register: pre_config
+
+- name: Get details
+  exos_command:
+    commands:
+      - show fdb port {{ int_id}}
+      - show lldp neighbors
+      - show cdp neighbor
+  changed_when: false
+  register: sw_info
+
+- name: Extract required info from output
+  set_fact:
+    port_description: >-
+      {{
+        pre_config.stdout[0]
+        | regex_replace('[\r\t\x08]', '')
+        | regex_search('(?m)^' ~ int_id ~ '\s+\S*\s*\d*\s*(.*)$')
+        | regex_replace('^\s*\d+\s*', '')
+        | default('unknown')
+        | trim
+      }}
+
+    vlan_membership: >-
+      {{
+        pre_config.stdout[1]
+        | regex_findall('(?m)^\s*(?:\d+\s+)?(Untagged|Tagged)\s+([A-Z0-9_-]+)\s*$')
+        | default('unknown/None')
+      }}
+
+    mac_count: >-
+      {{
+        sw_info.stdout[0]
+        | regex_findall('(?m)^([0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5})')
+        | length
+        | default('unknown/None')
+      }}
+
+    lldp_neighbors: >-
+      {{
+          sw_info.stdout[1]
+          | regex_findall('(?m)^' ~ int_id ~ '\s+\S+\s+\S+\s+\S+\s+\S+\s+(\S+)')
+          | default('unknown/None')
+      }}
+
+    cdp_neighbors: >-
+      {{
+          sw_info.stdout[2]
+          | regex_findall('(?m)^(\S+)\s+' ~ int_id ~ '\s+')
+          | default('unknown/None')
+      }}
+
+- name: Evaluate interface as trunk
+  set_fact:
+    tagged_vlan: "{{ vlan_membership | map('first') | select('equalto', 'Tagged') | list | length > 0  }}"
+
+- name: Display summarised output
+  debug:
+    msg:
+      - "Port {{ int_id}} Interface Description:"
+      - "{{ port_description }}"
+      - "Vlan Membership: {{ vlan_membership }}"
+      - "Port {{ int_id }} MAC Table Count: {{ mac_count }}"
+      - "{{ sw_info.stdout_lines[0] }}"
+      - "Port {{ int_id }} Trunk Operational Status: {{ tagged_vlan }}"
+      - "Port {{ int_id }} LLDP Neighbors:"
+      - "{{ lldp_neighbors }}"
+      - "Port {{ int_id }} CDP Neighbors: "
+      - "{{ cdp_neighbors }}"
+
+- name: Validate interface is safe to configure
+  ansible.builtin.assert:
+    that:
+      - "'AUTOMATION CONFIG' in pre_config.stdout[0]"
+      - mac_count | int <= 1
+      - vlan_membership | selectattr('0', 'equalto', 'Tagged') | list | length == 0
+      - lldp_neighbors | length | int == 0
+      - cdp_neighbors | length | int == 0
+    fail_msg: >
+      Interface {{ int_id }} failed safety checks! - See error above for validation check failure.
+      -- Manual validation required - Please contact ITSD.--
+
+- name: Apply template and save
+  exos_config:
+    lines:
+      - "configure ports {{ int_id }} description-string \"AUTOMATION CONFIG: ACCESS-PORT-VLAN-{{ vlan_id }} - {{ int_desc }}\""
+      - "configure vlan {{ vlan_id }} add ports {{ int_id }} untagged"
+      - "enable ports {{ int_id }}"
+    save_when: modified
+
+- name: Get new interface configuration
+  exos_command:
+    commands:
+      - show port {{ int_id }} description
+      - show ports {{ int_id }} vlan
+  changed_when: false
+  register: post_config
+
+- name: Display pre interface config
+  debug:
+    msg: "{{ pre_config.stdout_lines }}"
+
+- name: Display post interface config
+  debug:
+    msg: "{{ post_config.stdout_lines }}"
+
+#- name: Send syslog from device
+#  community.general.syslogger:
+#    msg: ""
+#    priority: info
+#    facility: local0
+#    remote_host: 127.0.0.1
+#    remote_port: 554
+

@@ -1,0 +1,113 @@
+---
+# Cisco IOS Template for Switchport Configuration Deployment Automation
+- name: Check if Vlan exists in vlan database
+  cisco.ios.ios_command:
+    commands:
+      - "show vlan id {{ vlan_id }}"
+  register: vlan_check
+
+- name: Fail if template does not exist
+  ansible.builtin.assert:
+    that:
+      - "'not found' not in vlan_check.stdout[0]"
+    fail_msg: "{{ vlan_id }} does not exist on {{ inventory_hostname }}. Aborting."
+
+- name: Get required info
+  cisco.ios.ios_command:
+    commands:
+      - "show interfaces {{ int_id }} description"
+      - "show interfaces {{ int_id }} switchport"
+      - "show mac address-table interface {{ int_id }}"
+      - "show lldp neighbors {{ int_id }}"
+      - "show cdp neighbors {{ int_id }}"
+      - "show running-config interface {{ int_id }}"
+  changed_when: false
+  register: sw_info
+
+- name: Extract required info from output
+  set_fact:
+    filter_if_desc: >-
+      {{
+        (
+          sw_info.stdout[0]
+          | regex_findall('^(?!Interface)\S+\s+\S+\s+\S+\s+(.+)$', multiline=True)
+          | first
+        ) | default('unknown')
+      }}
+    oper_mode: >-
+      {{
+        (
+          sw_info.stdout[1]
+          | regex_findall('(?m)^Operational Mode:[ \t]*(.+?)\s*$', multiline=True)
+          | first
+        ) | default('unknown')
+      }}
+    mac_count: >-
+      {{
+        sw_info.stdout[2]
+        | regex_findall('([0-9a-fA-F]{4}\.[0-9a-fA-F]{4}\.[0-9a-fA-F]{4})')
+        | length
+      }}
+
+- name: Display summarised output
+  debug:
+    msg:
+      - "{{ int_id }} Interface Description: {{ filter_if_desc }}"
+      - "{{ int_id }} MAC Table Count: {{ mac_count }}"
+      - "{{ sw_info.stdout_lines[2] }}"
+      - "{{ int_id }} Trunk Operational Status: {{ oper_mode }}"
+      - "{{ int_id }} LLDP Neighbors on Interface"
+      - "{{ sw_info.stdout[4] }}"
+      - "{{ int_id }} CDP Neighbors on Interface"
+      - "{{ sw_info.stdout_lines[3] }}"
+
+- name: Validate interface is safe to reconfigre
+  ansible.builtin.assert:
+    that:
+      - "'AUTOMATION CONFIG' in filter_if_desc"
+      - mac_count | int <= 1
+      - oper_mode != 'unknown'
+      - "'trunk' not in oper_mode"
+      - "'Total entries displayed: 0' in sw_info.stdout[3]"
+      - "'Total cdp entries displayed : 0' in sw_info.stdout[4]"
+    fail_msg: >
+      Interface {{ int_id }} failed safety checks! - See error above for validation check failure.
+      -- Manual validation required - Please contact ITSD.--
+
+- name: Apply template
+  cisco.ios.ios_config:
+    before:
+      - "default interface {{ int_id }}"
+    lines:
+      - "description AUTOMATION CONFIG: ACCESS-PORT-VLAN-{{ vlan_id }} - {{ int_desc }}"
+      - "switchport mode access"
+      - "switchport access vlan {{ vlan_id }}"
+      - "spanning-tree portfast"
+      - "spanning-tree bpduguard enable"
+      - "no shutdown"
+    parents:
+      - "interface {{ int_id }}"
+
+- name: Save running config to startup when modified
+  cisco.ios.ios_config:
+    save_when: modified
+
+- name: Get new interface configuration
+  cisco.ios.ios_command:
+    commands:
+      - "show running-config interface {{ int_id }}"
+  changed_when: false
+  register: post_config
+
+- name: Display pre interface config
+  ansible.builtin.debug:
+    var: sw_info.stdout_lines[5]
+
+- name: Display post interface config
+  ansible.builtin.debug:
+    var: post_config.stdout_lines
+
+- name: Send syslog from device
+  cisco.ios.ios_command:
+    commands:
+      - "send log Ansible Automation applied access port template for vlan {{ vlan_id }} to {{ int_id}} triggered by {{ user_name }}"
